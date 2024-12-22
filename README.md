@@ -11,5 +11,5 @@ Generate up-to-date license files from NoPayStation and this database by accessi
 ![image](https://github.com/user-attachments/assets/1981b996-b7c2-4b35-9587-e796e0e50e7f)
 
 # Credits 
-@esc0rtd3w and @NoPayStation 
+@esc0rtd3w, [PSNDL](https://github.com/EternalModz/PSNDL-Net-Archive) and @NoPayStation 
 </div>
