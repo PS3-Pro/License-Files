@@ -11,7 +11,7 @@ Generate up-to-date license files from [NoPayStation](https://nopaystation.com/)
 ![image](https://github.com/user-attachments/assets/1981b996-b7c2-4b35-9587-e796e0e50e7f)
 
 # Compatibility
-The license container `rap.bin` is only supported on `HEN 3.31` and `Evilnat 4.91.3` (or later). 
+The license container `rap.bin` is only supported on `HEN 3.31` and `Evilnat 4.91.3` (or later).</br>
 It provides a faster and more efficient way to install and store license files.
 
 # Credits 
