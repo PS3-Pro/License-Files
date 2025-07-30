@@ -15,5 +15,5 @@ The license container `rap.bin` is only supported on `HEN 3.31` and `Evilnat 4.9
 It provides a faster and more efficient way to install and store license files.
 
 # Credits 
-@esc0rtd3w, [PSNDL](https://github.com/EternalModz/PSNDL-Net-Archive) and @NoPayStation 
+@esc0rtd3w, [PSNDL](https://github.com/EternalModz/PSNDL-Net-Archive) and [NoPayStation](https://nopaystation.com/)
 </div>
