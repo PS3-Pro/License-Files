@@ -1,9 +1,9 @@
 <div align="center"> 
 
 # License Files
-License files for PS3™ 4K Pro
+License files for PS3™ Pro
 
-[![Github Releases (by tag)](https://img.shields.io/github/downloads/PS3-4K-Pro/License-Files/Licenses/total.svg?style=social)](https://github.com/PS3-4K-Pro/License-Files/releases/tag/Licenses)
+[![Github Releases (by tag)](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/total.svg?style=social)](https://github.com/PS3-4K-Pro/License-Files/releases/tag/Licenses)
 
 # License Generator
 Generate up-to-date license files from [NoPayStation](https://nopaystation.com/) and this database by accessing [here](https://colab.research.google.com/drive/17aguSJTZ9Rf0KSKT4rJ5uT4bbqn5iajY?usp=sharing). 
