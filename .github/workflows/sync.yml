@@ -65,7 +65,9 @@ jobs:
           if (Test-Path "$hfw_dir.pkg") { Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force }
 
           $date = Get-Date -Format "MMM dd, yyyy"
-          $qty = Get-Content stats.txt
+          $qty_raw = Get-Content stats.txt
+          
+          $qty = ([int]$qty_raw).ToString("N0", [cultureinfo]::GetCultureInfo("de-DE"))
           
           $notes = @"
           License Files for PS3™ Pro.
@@ -77,8 +79,8 @@ jobs:
           $qty License files.
 
           ⛔Note:
-          `License_Pack.pkg` is supported on all firmwares. (Slow installation)  
-          `License_Pack_Bin.pkg` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
+          `` `License_Pack.pkg`` ` is supported on all firmwares. (Slow installation)  
+          `` `License_Pack_Bin.pkg`` ` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
 
           📈Statistics:
           [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
