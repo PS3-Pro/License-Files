@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
-env:
+    env:
       PYTHONUTF8: 1
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -46,22 +46,23 @@ env:
       - name: Generate PKGs and Update Release
         if: steps.git-check.outputs.changed == 'true'
         shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --- 1. Criar License_Pack.pkg ---
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
+          if (Test-Path $cfw_dir) { Remove-Item -Recurse -Force $cfw_dir }
           New-Item -ItemType Directory -Force -Path $cfw_exdata
           Copy-Item "files/*" -Destination $cfw_exdata
           & .github\scripts\make_pkg.exe $cfw_dir
-          Rename-Item "$cfw_dir.pkg" "License_Pack.pkg"
+          if (Test-Path "$cfw_dir.pkg") { Rename-Item "$cfw_dir.pkg" "License_Pack.pkg" -Force }
 
           $hfw_dir = "PS3HFW-LICENSES0_00-0000000000000000"
           $hfw_exdata = "$hfw_dir/dev_hdd0/exdata"
+          if (Test-Path $hfw_dir) { Remove-Item -Recurse -Force $hfw_dir }
           New-Item -ItemType Directory -Force -Path $hfw_exdata
           Copy-Item "rap.bin" -Destination $hfw_exdata
           & .github\scripts\make_pkg.exe $hfw_dir
-          Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg"
+          if (Test-Path "$hfw_dir.pkg") { Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force }
 
           $date = Get-Date -Format "MMM dd, yyyy"
           $qty = Get-Content stats.txt
