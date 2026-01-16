@@ -1,0 +1,36 @@
+name: Auto Sync Licenses
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  update-repo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install pandas requests
+
+      - name: Run Sync Script
+        run: python sync_licenses.py
+
+      - name: Deploy Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "PS3-Pro Bot"
+          git add files/ rap.bin
+          # O script só faz o commit se houver ficheiros novos ou alterados
+          git commit -m "Daily Sync: $(date +'%d/%m/%Y') [NPS Scan & Replace]" || exit 0
+          git push
