@@ -47,7 +47,6 @@ jobs:
         if: steps.git-check.outputs.changed == 'true'
         shell: pwsh
         run: |
-          # --- 1. Create License_Pack.pkg ---
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
           if (Test-Path $cfw_dir) { Remove-Item -Recurse -Force $cfw_dir }
@@ -66,25 +65,25 @@ jobs:
 
           $date = Get-Date -Format "MMM dd, yyyy"
           $qty_raw = Get-Content stats.txt
-          
           $qty = ([int]$qty_raw).ToString("N0", [cultureinfo]::GetCultureInfo("de-DE"))
-          
+          $bt = "`"
+
           $notes = @"
-          License Files for PS3™ Pro.
+License Files for PS3™ Pro.
 
-          📅Date:
-          $date
+📅Date:
+$date
 
-          📚Quantity:
-          $qty License files.
+📚Quantity:
+$qty License files.
 
-          ⛔Note:
-          `` `License_Pack.pkg`` ` is supported on all firmwares. (Slow installation)  
-          `` `License_Pack_Bin.pkg`` ` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
+⛔Note:
+${bt}License_Pack.pkg${bt} is supported on all firmwares. (Slow installation)
+${bt}License_Pack_Bin.pkg${bt} is supported only on ${bt}HEN 3.31${bt} or higher and ${bt}Evilnat 4.91.3${bt} or higher, and installs instantly. (Recommended)
 
-          📈Statistics:
-          [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
-          "@
+📈Statistics:
+[![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
+"@
 
           gh release edit Licenses --notes "$notes"
           gh release upload Licenses License_Pack.pkg License_Pack_Bin.pkg --clobber
