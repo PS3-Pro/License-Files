@@ -1,4 +1,4 @@
-name: Auto Sync Licenses
+name: Auto Sync & Release PKG
 
 on:
   workflow_dispatch:
@@ -6,8 +6,8 @@ on:
     - cron: '0 0 * * *'
 
 jobs:
-  update-repo:
-    runs-on: ubuntu-latest
+  build-and-release:
+    runs-on: windows-latest
     permissions:
       contents: write
 
@@ -24,13 +24,66 @@ jobs:
         run: pip install pandas requests
 
       - name: Run Sync Script
-        run: python sync_licenses.py
+        run: python .github/scripts/sync_licenses.py
 
-      - name: Deploy Changes
+      - name: Check for Modifications
+        id: git-check
+        shell: pwsh
         run: |
+          git add files/ rap.bin
+          $status = git status --porcelain
+          if ($status) { 
+            echo "changed=true" >> $env:GITHUB_OUTPUT 
+            echo "Mudanças detectadas. Iniciando criação dos PKGs..."
+          } else {
+            echo "changed=false" >> $env:GITHUB_OUTPUT
+            echo "Nenhuma mudança encontrada."
+          }
+
+      - name: Generate PKGs and Update Release
+        if: steps.git-check.outputs.changed == 'true'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
+          $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
+          New-Item -ItemType Directory -Force -Path $cfw_exdata
+          Copy-Item "files/*" -Destination $cfw_exdata
+          & .github\scripts\make_pkg.exe $cfw_dir
+          Rename-Item "$cfw_dir.pkg" "License_Pack.pkg"
+
+          $hfw_dir = "PS3HFW-LICENSES0_00-0000000000000000"
+          $hfw_exdata = "$hfw_dir/dev_hdd0/exdata"
+          New-Item -ItemType Directory -Force -Path $hfw_exdata
+          Copy-Item "rap.bin" -Destination $hfw_exdata
+          & .github\scripts\make_pkg.exe $hfw_dir
+          Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg"
+
+          $date = Get-Date -Format "MMM dd, yyyy"
+          $qty = Get-Content stats.txt
+          
+          $notes = @"
+          License Files for PS3™ Pro.
+
+          📅Date:
+          $date
+
+          📚Quantity:
+          $qty License files.
+
+          ⛔Note:
+          `License_Pack.pkg` is supported on all firmwares. (Slow installation)  
+          `License_Pack_Bin.pkg` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
+
+          📈Statistics:
+          [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
+          "@
+
+          gh release edit Licenses --notes "$notes"
+          gh release upload Licenses License_Pack.pkg License_Pack_Bin.pkg --clobber
+
           git config --local user.email "action@github.com"
           git config --local user.name "PS3-Pro Bot"
-          git add files/ rap.bin
-          # O script só faz o commit se houver ficheiros novos ou alterados
-          git commit -m "Daily Sync: $(date +'%d/%m/%Y') [NPS Scan & Replace]" || exit 0
+          git commit -m "Auto-update: $date ($qty files)"
           git push
