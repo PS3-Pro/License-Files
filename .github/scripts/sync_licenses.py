@@ -24,6 +24,7 @@ TSV_URLS = [
 ]
 
 def process_tsv(url):
+    """Downloads TSV data and forces update of license files."""
     try:
         r = requests.get(url, timeout=30)
         from io import StringIO
@@ -36,9 +37,11 @@ def process_tsv(url):
                     file_path = os.path.join(FILES_DIR, f"{cid}.rap")
                     with open(file_path, "wb") as f:
                         f.write(binascii.unhexlify(val[:32]))
-    except Exception as e: print(f"❌ Erro: {url}: {e}")
+    except Exception as e: 
+        print(f"Error processing {url}: {e}")
 
 def create_rap_bin():
+    """Generates the consolidated rap.bin container."""
     MAGIC, PADC = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12, b"\x00" * 12
     all_files = sorted([f for f in os.listdir(FILES_DIR) if f.endswith(".rap")])
     with open(RAP_BIN_EXE, "wb") as bf:
@@ -48,13 +51,20 @@ def create_rap_bin():
                 bf.write(MAGIC + fn[:-4].encode() + PADC + content)
 
 def main():
-    if not os.path.exists(FILES_DIR): os.makedirs(FILES_DIR)
-    with ThreadPoolExecutor(max_workers=5) as exe: exe.map(process_tsv, TSV_URLS)
+    if not os.path.exists(FILES_DIR): 
+        os.makedirs(FILES_DIR)
+    
+    print("Starting database sync...")
+    with ThreadPoolExecutor(max_workers=5) as exe: 
+        exe.map(process_tsv, TSV_URLS)
+    
     create_rap_bin()
     
     qty = len(os.listdir(FILES_DIR))
-    with open("stats.txt", "w") as f: f.write(str(qty))
-    print(f"✅ Total: {qty}")
+    with open("stats.txt", "w") as f: 
+        f.write(str(qty))
+    
+    print(f"Sync completed. Total license files: {qty}")
 
 if __name__ == "__main__":
     main()

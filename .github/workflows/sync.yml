@@ -37,17 +37,17 @@ jobs:
           $status = git status --porcelain
           if ($status) { 
             echo "changed=true" >> $env:GITHUB_OUTPUT 
-            echo "Mudanças detectadas. Iniciando criação dos PKGs..."
+            echo "Changes detected. Starting PKG creation..."
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo "Nenhuma mudança encontrada."
+            echo "No changes found. Skipping build."
           }
 
       - name: Generate PKGs and Update Release
         if: steps.git-check.outputs.changed == 'true'
         shell: pwsh
         run: |
-          # --- 1. Criar License_Pack.pkg ---
+          # --- 1. Create License_Pack.pkg ---
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
           if (Test-Path $cfw_dir) { Remove-Item -Recurse -Force $cfw_dir }
@@ -89,5 +89,5 @@ jobs:
 
           git config --local user.email "action@github.com"
           git config --local user.name "PS3-Pro Bot"
-          git commit -m "Auto-update: $date ($qty files)"
+          git commit -m "Auto-update: $date ($qty files synced)"
           git push
