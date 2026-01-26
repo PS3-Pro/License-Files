@@ -3,7 +3,7 @@ name: Auto Sync & Release PKG
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 3 * * *'
 
 jobs:
   build-and-release:
@@ -12,11 +12,12 @@ jobs:
       contents: write
     env:
       PYTHONUTF8: 1
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -33,7 +34,7 @@ jobs:
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin
+          git add files/ rap.bin stats.txt
           $status = git status --porcelain
           if ($status) { 
             echo "changed=true" >> $env:GITHUB_OUTPUT 
@@ -46,6 +47,8 @@ jobs:
       - name: Generate PKGs and Update Release
         if: steps.git-check.outputs.changed == 'true'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
