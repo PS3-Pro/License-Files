@@ -33,7 +33,7 @@ jobs:
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin
+          git add .
           $status = git status --porcelain
           if ($status) { 
             echo "changed=true" >> $env:GITHUB_OUTPUT 
@@ -91,5 +91,7 @@ jobs:
 
           git config --local user.email "action@github.com"
           git config --local user.name "PS3-Pro Bot"
+          
+          git add .
           git commit -m "Auto-update: $date ($qty files synced)"
           git push
