@@ -35,13 +35,14 @@ jobs:
         run: |
           git add files/ rap.bin
           
-          $status = git status --porcelain
+          $status = git status --porcelain files/ rap.bin
+          
           if ($status) { 
             echo "changed=true" >> $env:GITHUB_OUTPUT 
-            echo "Changes detected. Starting PKG creation..."
+            echo "Changes detected in licenses. Starting PKG creation..."
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo "No changes found. Skipping build."
+            echo "No changes found in licenses. Skipping build."
           }
 
       - name: Generate PKGs and Update Release
