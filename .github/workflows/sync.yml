@@ -1,4 +1,4 @@
-name: Auto Sync & Release PKG
+name: Update License Files
 
 on:
   workflow_dispatch:
