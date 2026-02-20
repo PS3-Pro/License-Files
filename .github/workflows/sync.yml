@@ -33,7 +33,7 @@ jobs:
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin stats.txt
+          git add files/ rap.bin
           
           $status = git status --porcelain
           if ($status) { 
@@ -65,7 +65,8 @@ jobs:
           if (Test-Path "$hfw_dir.pkg") { Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force }
 
           $date = Get-Date -Format "MMM dd, yyyy"
-          $qty_raw = Get-Content stats.txt
+          
+          $qty_raw = (Get-ChildItem -Path "files" -File | Measure-Object).Count
           
           $qty = ([int]$qty_raw).ToString("N0", [cultureinfo]::GetCultureInfo("de-DE"))
           
@@ -89,8 +90,8 @@ jobs:
           gh release edit Licenses --notes "$notes"
           gh release upload Licenses License_Pack.pkg License_Pack_Bin.pkg --clobber
 
-          git config --local user.email "action@github.com"
-          git config --local user.name "PS3-Pro Bot"
+          git config --global user.name "PS3-Pro Bot"
+          git config --global user.email "bot@ps3pro.com"
           
           git commit -m "Auto-update: $date ($qty files synced)"
           git push
