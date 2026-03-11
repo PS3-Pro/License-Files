@@ -33,7 +33,7 @@ def process_tsv(url):
             rows = df[df["RAP"].notna() & (df["RAP"].str.len() >= 32)].to_dict('records')
             for row in rows:
                 cid, val = str(row["Content ID"]).strip(), str(row["RAP"]).strip()
-                if re.fullmatch(r"[0-9a-fA-F]+", val):
+                if len(cid) == 36 and re.fullmatch(r"[0-9a-fA-F]+", val):
                     file_path = os.path.join(FILES_DIR, f"{cid}.rap")
                     with open(file_path, "wb") as f:
                         f.write(binascii.unhexlify(val[:32]))
@@ -42,28 +42,34 @@ def process_tsv(url):
 
 def create_rap_bin():
     """Generates the consolidated rap.bin container."""
-    MAGIC, PADC = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12, b"\x00" * 12
+    MAGIC = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12
+    PADC = b"\x00" * 12
     all_files = sorted([f for f in os.listdir(FILES_DIR) if f.endswith(".rap")])
+
     with open(RAP_BIN_EXE, "wb") as bf:
         for fn in all_files:
-            content = open(os.path.join(FILES_DIR, fn), "rb").read(16)
-            if len(content) == 16:
-                bf.write(MAGIC + fn[:-4].encode() + PADC + content)
+            cid = fn[:-4]
+            file_path = os.path.join(FILES_DIR, fn)
+            with open(file_path, "rb") as f:
+                content = f.read(16)
+
+            if len(content) == 16 and len(cid) == 36:
+                bf.write(MAGIC + cid.encode() + PADC + content)
 
 def main():
     if not os.path.exists(FILES_DIR): 
         os.makedirs(FILES_DIR)
-    
+
     print("Starting database sync...")
     with ThreadPoolExecutor(max_workers=5) as exe: 
         exe.map(process_tsv, TSV_URLS)
-    
+
     create_rap_bin()
-    
+
     qty = len(os.listdir(FILES_DIR))
     with open("stats.txt", "w") as f: 
         f.write(str(qty))
-    
+
     print(f"Sync completed. Total license files: {qty}")
 
 if __name__ == "__main__":
