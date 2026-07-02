@@ -8,8 +8,10 @@ on:
 jobs:
   build-and-release:
     runs-on: windows-latest
+
     permissions:
       contents: write
+
     env:
       PYTHONUTF8: 1
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,16 +35,14 @@ jobs:
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin
-          
-          $status = git status --porcelain files/ rap.bin
-          
-          if ($status) { 
-            echo "changed=true" >> $env:GITHUB_OUTPUT 
-            echo "Changes detected in licenses. Starting PKG creation..."
+          git add files/ rap.bin .github/stats.json
+          $status = git status --porcelain files/ rap.bin .github/stats.json
+          if ($status) {
+            echo "changed=true" >> $env:GITHUB_OUTPUT
+            echo "Changes detected in licenses or stats. Starting PKG creation..."
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo "No changes found in licenses. Skipping build."
+            echo "No changes found in licenses or stats. Skipping build."
           }
 
       - name: Generate PKGs and Update Release
@@ -66,25 +66,23 @@ jobs:
           if (Test-Path "$hfw_dir.pkg") { Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force }
 
           $date = Get-Date -Format "MMM dd, yyyy"
-          
-          $qty_raw = (Get-ChildItem -Path "files" -File | Measure-Object).Count
-          
+          $qty_raw = (Get-ChildItem -Path "files" -File -Filter "*.rap" | Measure-Object).Count
           $qty = ([int]$qty_raw).ToString("N0", [cultureinfo]::GetCultureInfo("de-DE"))
-          
+
           $notes = @"
           License Files for PS3™ Pro.
 
-          📅Date:
+          Date:
           $date
 
-          📚Quantity:
+          Quantity:
           $qty License files.
 
           ⛔Note:
-          `` `License_Pack.pkg`` ` is supported on all firmwares. (Slow installation)  
+          `` `License_Pack.pkg`` ` is supported on all firmwares. (Slow installation)
           `` `License_Pack_Bin.pkg`` ` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
 
-          📈Statistics:
+          Statistics:
           [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
           "@
 
@@ -93,6 +91,5 @@ jobs:
 
           git config --global user.name "PS3-Pro Bot"
           git config --global user.email "bot@ps3pro.com"
-          
           git commit -m "Auto-update: $date ($qty files synced)"
           git push
