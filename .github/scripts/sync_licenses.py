@@ -123,14 +123,17 @@ def format_quantity(quantity):
     return f"{quantity:,}".replace(",", ".")
 
 
+def format_updated_at(dt):
+    return dt.strftime("%b %d, %Y")
+
+
 def write_stats(quantity, rap_quantity, edat_quantity, rap_bin_quantity):
     now = datetime.now(timezone.utc)
 
     stats = {
         "quantity": quantity,
         "label": format_quantity(quantity),
-        "date": now.strftime("%b %d, %Y"),
-        "updated_at": now.isoformat(),
+        "updated_at": format_updated_at(now),
         "rap": rap_quantity,
         "edat": edat_quantity,
         "rap_bin": rap_bin_quantity,

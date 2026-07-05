@@ -49,7 +49,7 @@ jobs:
         shell: pwsh
         run: |
           $stats = Get-Content ".github/stats.json" -Raw | ConvertFrom-Json
-          $date = $stats.date
+          $date = $stats.updated_at
           $qty_raw = [int]$stats.quantity
           $qty = $stats.label
 
