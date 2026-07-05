@@ -8,10 +8,8 @@ on:
 jobs:
   build-and-release:
     runs-on: windows-latest
-
     permissions:
       contents: write
-
     env:
       PYTHONUTF8: 1
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,53 +35,67 @@ jobs:
         run: |
           git add files/ rap.bin .github/stats.json
           $status = git status --porcelain files/ rap.bin .github/stats.json
+
           if ($status) {
             echo "changed=true" >> $env:GITHUB_OUTPUT
-            echo "Changes detected in licenses or stats. Starting PKG creation..."
+            echo "Changes detected in licenses or stats.`nStarting PKG creation..."
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo "No changes found in licenses or stats. Skipping build."
+            echo "No changes found in licenses or stats.`nSkipping build."
           }
 
       - name: Generate PKGs and Update Release
         if: steps.git-check.outputs.changed == 'true'
         shell: pwsh
         run: |
+          $stats = Get-Content ".github/stats.json" -Raw | ConvertFrom-Json
+          $date = $stats.date
+          $qty_raw = [int]$stats.quantity
+          $qty = $stats.label
+
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
-          if (Test-Path $cfw_dir) { Remove-Item -Recurse -Force $cfw_dir }
+
+          if (Test-Path $cfw_dir) {
+            Remove-Item -Recurse -Force $cfw_dir
+          }
+
           New-Item -ItemType Directory -Force -Path $cfw_exdata
           Copy-Item "files/*" -Destination $cfw_exdata
           & .github\scripts\make_pkg.exe $cfw_dir
-          if (Test-Path "$cfw_dir.pkg") { Rename-Item "$cfw_dir.pkg" "License_Pack.pkg" -Force }
+
+          if (Test-Path "$cfw_dir.pkg") {
+            Rename-Item "$cfw_dir.pkg" "License_Pack.pkg" -Force
+          }
 
           $hfw_dir = "PS3HFW-LICENSES0_00-0000000000000000"
           $hfw_exdata = "$hfw_dir/dev_hdd0/exdata"
-          if (Test-Path $hfw_dir) { Remove-Item -Recurse -Force $hfw_dir }
+
+          if (Test-Path $hfw_dir) {
+            Remove-Item -Recurse -Force $hfw_dir
+          }
+
           New-Item -ItemType Directory -Force -Path $hfw_exdata
           Copy-Item "rap.bin" -Destination $hfw_exdata
           & .github\scripts\make_pkg.exe $hfw_dir
-          if (Test-Path "$hfw_dir.pkg") { Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force }
 
-          $date = Get-Date -Format "MMM dd, yyyy"
-          $qty_raw = (Get-ChildItem -Path "files" -File -Filter "*.rap" | Measure-Object).Count
-          $qty = ([int]$qty_raw).ToString("N0", [cultureinfo]::GetCultureInfo("de-DE"))
+          if (Test-Path "$hfw_dir.pkg") {
+            Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force
+          }
 
           $notes = @"
           License Files for PS3™ Pro.
 
-          Date:
-          $date
-
-          Quantity:
-          $qty License files.
+          Date: $date
+          Quantity: $qty License files.
 
           ⛔Note:
-          `` `License_Pack.pkg`` ` is supported on all firmwares. (Slow installation)
-          `` `License_Pack_Bin.pkg`` ` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
+          ``License_Pack.pkg`` is supported on all firmwares. (Slow installation)
+          ``License_Pack_Bin.pkg`` is supported only on HEN 3.31 or higher and Evilnat 4.91.3 or higher, and installs instantly. (Recommended)
 
           Statistics:
-          [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg) [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
+          [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack.pkg)
+          [![Github releases](https://img.shields.io/github/downloads/PS3-Pro/License-Files/Licenses/License_Pack_Bin.pkg)](https://github.com/PS3-Pro/License-Files/releases/download/Licenses/License_Pack_Bin.pkg)
           "@
 
           gh release edit Licenses --notes "$notes"

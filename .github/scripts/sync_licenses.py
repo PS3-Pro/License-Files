@@ -9,6 +9,7 @@ from io import StringIO
 import pandas as pd
 import requests
 
+
 FILES_DIR = "files"
 RAP_BIN_EXE = "rap.bin"
 STATS_JSON = ".github/stats.json"
@@ -48,6 +49,7 @@ def process_tsv(url):
 
             if len(cid) == 36 and re.fullmatch(r"[0-9a-fA-F]+", val):
                 file_path = os.path.join(FILES_DIR, f"{cid}.rap")
+
                 with open(file_path, "wb") as f:
                     f.write(binascii.unhexlify(val[:32]))
 
@@ -55,38 +57,83 @@ def process_tsv(url):
         print(f"Error processing {url}: {e}")
 
 
+def is_valid_rap_file(file_path, filename):
+    if not os.path.isfile(file_path):
+        return False
+
+    if not filename.lower().endswith(".rap"):
+        return False
+
+    content_id = os.path.splitext(filename)[0]
+
+    if len(content_id) != 36:
+        return False
+
+    return os.path.getsize(file_path) == 16
+
+
+def is_valid_edat_file(file_path, filename):
+    if not os.path.isfile(file_path):
+        return False
+
+    if not filename.lower().endswith(".edat"):
+        return False
+
+    return os.path.getsize(file_path) > 0
+
+
+def get_rap_files():
+    return sorted(
+        filename
+        for filename in os.listdir(FILES_DIR)
+        if is_valid_rap_file(os.path.join(FILES_DIR, filename), filename)
+    )
+
+
+def get_edat_files():
+    return sorted(
+        filename
+        for filename in os.listdir(FILES_DIR)
+        if is_valid_edat_file(os.path.join(FILES_DIR, filename), filename)
+    )
+
+
 def get_license_files():
-    return sorted([f for f in os.listdir(FILES_DIR) if f.endswith(".rap")])
+    return sorted(get_rap_files() + get_edat_files())
 
 
 def create_rap_bin():
-    """Generates the consolidated rap.bin container."""
-    MAGIC = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12
-    PADC = b"\x00" * 12
-    all_files = get_license_files()
+    """Generates the consolidated rap.bin container using RAP files only."""
+    magic = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12
+    padc = b"\x00" * 12
+    all_files = get_rap_files()
 
     with open(RAP_BIN_EXE, "wb") as bf:
-        for fn in all_files:
-            cid = fn[:-4]
-            file_path = os.path.join(FILES_DIR, fn)
+        for filename in all_files:
+            content_id = os.path.splitext(filename)[0]
+            file_path = os.path.join(FILES_DIR, filename)
 
             with open(file_path, "rb") as f:
                 content = f.read(16)
 
-            if len(content) == 16 and len(cid) == 36:
-                bf.write(MAGIC + cid.encode() + PADC + content)
+            bf.write(magic + content_id.encode() + padc + content)
 
 
-def write_stats(quantity):
+def format_quantity(quantity):
+    return f"{quantity:,}".replace(",", ".")
+
+
+def write_stats(quantity, rap_quantity, edat_quantity, rap_bin_quantity):
     now = datetime.now(timezone.utc)
-    label = f"{quantity:,}".replace(",", ".")
-
 
     stats = {
         "quantity": quantity,
-        "label": label,
-        "date": now.strftime("%Y-%m-%d"),
+        "label": format_quantity(quantity),
+        "date": now.strftime("%b %d, %Y"),
         "updated_at": now.isoformat(),
+        "rap": rap_quantity,
+        "edat": edat_quantity,
+        "rap_bin": rap_bin_quantity,
     }
 
     os.makedirs(os.path.dirname(STATS_JSON), exist_ok=True)
@@ -107,10 +154,20 @@ def main():
 
     create_rap_bin()
 
-    qty = len(get_license_files())
-    write_stats(qty)
+    rap_files = get_rap_files()
+    edat_files = get_edat_files()
+    license_files = get_license_files()
 
-    print(f"Sync completed. Total license files: {qty}")
+    write_stats(
+        quantity=len(license_files),
+        rap_quantity=len(rap_files),
+        edat_quantity=len(edat_files),
+        rap_bin_quantity=len(rap_files),
+    )
+
+    print(f"Sync completed.\nTotal license files: {len(license_files)}")
+    print(f"RAP files: {len(rap_files)}")
+    print(f"EDAT files: {len(edat_files)}")
 
 
 if __name__ == "__main__":
