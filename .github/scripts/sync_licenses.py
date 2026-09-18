@@ -16,18 +16,18 @@ CATALOG_JSON = ".github/catalog.json"
 
 # Keep this list aligned with every source used by the License Pack.
 TSV_SOURCES = [
-    {"url": "https://nopaystation.com/tsv/PS3_GAMES.tsv", "type": "game", "label": "Games", "platform": "PS3", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PS3_DLCS.tsv", "type": "dlc", "label": "DLCs", "platform": "PS3", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PS3_THEMES.tsv", "type": "theme", "label": "Themes", "platform": "PS3", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PS3_AVATARS.tsv", "type": "avatar", "label": "Avatars", "platform": "PS3", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PS3_DEMOS.tsv", "type": "demo", "label": "Demos", "platform": "PS3", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PSP_GAMES.tsv", "type": "psp-game", "label": "PSP Games", "platform": "PSP", "pending": False},
-    {"url": "https://nopaystation.com/tsv/PSP_DLCS.tsv", "type": "psp-dlc", "label": "PSP DLCs", "platform": "PSP", "pending": False},
-    {"url": "https://nopaystation.com/tsv/pending/PS3_GAMES.tsv", "type": "game", "label": "Games", "platform": "PS3", "pending": True},
-    {"url": "https://nopaystation.com/tsv/pending/PS3_DLCS.tsv", "type": "dlc", "label": "DLCs", "platform": "PS3", "pending": True},
-    {"url": "https://nopaystation.com/tsv/pending/PS3_THEMES.tsv", "type": "theme", "label": "Themes", "platform": "PS3", "pending": True},
-    {"url": "https://nopaystation.com/tsv/pending/PS3_AVATARS.tsv", "type": "avatar", "label": "Avatars", "platform": "PS3", "pending": True},
-    {"url": "https://nopaystation.com/tsv/pending/PS3_DEMOS.tsv", "type": "demo", "label": "Demos", "platform": "PS3", "pending": True},
+    {"url": "https://nopaystation.com/tsv/PS3_GAMES.tsv", "type": "game", "label": "Games", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/PS3_DLCS.tsv", "type": "dlc", "label": "DLCs", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/PS3_THEMES.tsv", "type": "theme", "label": "Themes", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/PS3_AVATARS.tsv", "type": "avatar", "label": "Avatars", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/PS3_DEMOS.tsv", "type": "demo", "label": "Demos", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/PSP_GAMES.tsv", "type": "psp-game", "label": "PSP Games", "platform": "PSP"},
+    {"url": "https://nopaystation.com/tsv/PSP_DLCS.tsv", "type": "psp-dlc", "label": "PSP DLCs", "platform": "PSP"},
+    {"url": "https://nopaystation.com/tsv/pending/PS3_GAMES.tsv", "type": "game", "label": "Games", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/pending/PS3_DLCS.tsv", "type": "dlc", "label": "DLCs", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/pending/PS3_THEMES.tsv", "type": "theme", "label": "Themes", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/pending/PS3_AVATARS.tsv", "type": "avatar", "label": "Avatars", "platform": "PS3"},
+    {"url": "https://nopaystation.com/tsv/pending/PS3_DEMOS.tsv", "type": "demo", "label": "Demos", "platform": "PS3"},
 ]
 
 
@@ -42,6 +42,44 @@ def is_valid_rap(value):
     return len(value) >= 32 and re.fullmatch(r"[0-9a-fA-F]+", value) is not None
 
 
+def repair_mojibake(value):
+    text = clean_value(value)
+    if not text:
+        return ""
+
+    # Legacy strings from older NPS exports / decode paths.
+    text = (text
+            .replace("Γäó", "™")
+            .replace("ΓÇô", "–")
+            .replace("ΓÇö", "—")
+            .replace("ΓÇÖ", "’"))
+
+    # Repair UTF-8 bytes that were previously decoded as Windows-1252.
+    # Run twice so double-mojibake such as "Ã¢â€žÂ¢" also collapses to "™".
+    for _ in range(2):
+        if not re.search(r"[ÃÂâð]", text):
+            break
+        try:
+            repaired = text.encode("cp1252").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            break
+        if repaired == text:
+            break
+        text = repaired
+
+    # Final targeted fallbacks for malformed legacy strings that cannot be
+    # round-tripped as a whole through cp1252.
+    return (text
+            .replace("â„¢", "™")
+            .replace("â€“", "–")
+            .replace("â€”", "—")
+            .replace("â€™", "’"))
+
+
+def clean_catalog_name(value):
+    return repair_mojibake(value)
+
+
 def process_tsv(source):
     """Downloads one NPS TSV, refreshes RAP files, and returns catalog rows."""
     url = source["url"]
@@ -50,7 +88,14 @@ def process_tsv(source):
     try:
         response = requests.get(url, timeout=30, headers={"User-Agent": "PS3-Pro-License-Sync/2.0"})
         response.raise_for_status()
-        frame = pd.read_csv(StringIO(response.text), sep="\t", dtype=str, keep_default_na=False)
+        try:
+            tsv_text = response.content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            # Some NPS exports contain Windows-1252 bytes (notably ™).
+            # Falling back here prevents one source from aborting the whole
+            # catalog update and leaving an old catalog online.
+            tsv_text = response.content.decode("cp1252")
+        frame = pd.read_csv(StringIO(tsv_text), sep="\t", dtype=str, keep_default_na=False)
 
         for row in frame.to_dict("records"):
             content_id = clean_value(row.get("Content ID"))
@@ -62,7 +107,7 @@ def process_tsv(source):
                 with open(file_path, "wb") as handle:
                     handle.write(binascii.unhexlify(rap_value[:32]))
 
-            name = clean_value(row.get("Name"))
+            name = clean_catalog_name(row.get("Name"))
             title_id = clean_value(row.get("Title ID")).upper()
             region = clean_value(row.get("Region")).upper()
 
@@ -79,7 +124,6 @@ def process_tsv(source):
                 "t": source["type"],
                 "tl": source["label"],
                 "p": source["platform"],
-                "q": 1 if source["pending"] else 0,
                 "nr": 1 if not_required else 0,
             })
 
