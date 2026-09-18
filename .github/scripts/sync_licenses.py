@@ -12,7 +12,7 @@ import requests
 FILES_DIR = "files"
 RAP_BIN_EXE = "rap.bin"
 STATS_JSON = ".github/stats.json"
-CATALOG_JSON = "license_catalog.json"
+CATALOG_JSON = ".github/catalog.json"
 
 # Keep this list aligned with every source used by the License Pack.
 TSV_SOURCES = [
@@ -139,7 +139,9 @@ def catalog_key(item):
 
 
 def write_catalog(all_rows, now):
-    existing_license_ids = {os.path.splitext(name)[0].lower() for name in get_license_files()}
+    # Keep the exact filename so the website can download an individual license without guessing.
+    license_file_by_id = {os.path.splitext(name)[0].lower(): name for name in get_license_files()}
+    existing_license_ids = set(license_file_by_id)
 
     # TSV_SOURCES is ordered official first, pending second. setdefault keeps official metadata when duplicated.
     unique = {}
@@ -154,7 +156,8 @@ def write_catalog(all_rows, now):
 
     for item in unique.values():
         content_id = item.get("cid", "").strip().lower()
-        if content_id and content_id in existing_license_ids:
+        license_file = license_file_by_id.get(content_id, "") if content_id else ""
+        if license_file:
             status = "available"
             license_count += 1
         elif item.get("nr"):
@@ -167,6 +170,8 @@ def write_catalog(all_rows, now):
         item = dict(item)
         item.pop("nr", None)
         item["s"] = status
+        if license_file:
+            item["f"] = license_file
         content.append(item)
         type_counts[item["t"]] = type_counts.get(item["t"], 0) + 1
 
