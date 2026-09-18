@@ -12,7 +12,7 @@ import requests
 FILES_DIR = "files"
 RAP_BIN_EXE = "rap.bin"
 STATS_JSON = ".github/stats.json"
-CATALOG_JSON = ".github/license_catalog.json"
+CATALOG_JSON = "license_catalog.json"
 
 # Keep this list aligned with every source used by the License Pack.
 TSV_SOURCES = [
@@ -186,7 +186,9 @@ def write_catalog(all_rows, now):
         "content": content,
     }
 
-    os.makedirs(os.path.dirname(CATALOG_JSON), exist_ok=True)
+    catalog_dir = os.path.dirname(CATALOG_JSON)
+    if catalog_dir:
+        os.makedirs(catalog_dir, exist_ok=True)
     with open(CATALOG_JSON, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
         handle.write("\n")

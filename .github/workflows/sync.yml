@@ -2,6 +2,12 @@ name: Update License Files
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/sync_licenses.py'
+      - '.github/workflows/sync.yml'
   schedule:
     - cron: '0 3 * * *'
 
@@ -35,10 +41,10 @@ jobs:
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin .github/stats.json .github/license_catalog.json
+          git add files/ rap.bin .github/stats.json license_catalog.json
 
           $licenseStatus = git status --porcelain files/ rap.bin
-          $metadataStatus = git status --porcelain .github/stats.json .github/license_catalog.json
+          $metadataStatus = git status --porcelain .github/stats.json license_catalog.json
 
           if ($licenseStatus) {
             echo "license_changed=true" >> $env:GITHUB_OUTPUT
@@ -123,7 +129,7 @@ jobs:
 
           git config --global user.name "PS3-Pro Bot"
           git config --global user.email "bot@ps3pro.com"
-          git add files/ rap.bin .github/stats.json .github/license_catalog.json
+          git add files/ rap.bin .github/stats.json license_catalog.json
 
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
