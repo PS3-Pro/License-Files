@@ -8,8 +8,10 @@ on:
 jobs:
   build-and-release:
     runs-on: windows-latest
+
     permissions:
       contents: write
+
     env:
       PYTHONUTF8: 1
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,59 +28,70 @@ jobs:
       - name: Install Dependencies
         run: pip install pandas requests
 
-      - name: Run Sync Script
+      - name: Sync Licenses and Build Catalog
         run: python .github/scripts/sync_licenses.py
 
       - name: Check for Modifications
         id: git-check
         shell: pwsh
         run: |
-          git add files/ rap.bin .github/stats.json
-          $status = git status --porcelain files/ rap.bin .github/stats.json
+          git add files/ rap.bin .github/stats.json .github/license_catalog.json
 
-          if ($status) {
+          $licenseStatus = git status --porcelain files/ rap.bin
+          $metadataStatus = git status --porcelain .github/stats.json .github/license_catalog.json
+
+          if ($licenseStatus) {
+            echo "license_changed=true" >> $env:GITHUB_OUTPUT
+            echo "License files changed. PKGs will be rebuilt."
+          } else {
+            echo "license_changed=false" >> $env:GITHUB_OUTPUT
+            echo "No license file changes. PKG rebuild is not needed."
+          }
+
+          if ($metadataStatus) {
+            echo "metadata_changed=true" >> $env:GITHUB_OUTPUT
+            echo "Stats or License Pack catalog changed."
+          } else {
+            echo "metadata_changed=false" >> $env:GITHUB_OUTPUT
+            echo "No stats or catalog changes."
+          }
+
+          if ($licenseStatus -or $metadataStatus) {
             echo "changed=true" >> $env:GITHUB_OUTPUT
-            echo "Changes detected in licenses or stats.`nStarting PKG creation..."
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
-            echo "No changes found in licenses or stats.`nSkipping build."
+            echo "Nothing changed."
           }
 
       - name: Generate PKGs and Update Release
-        if: steps.git-check.outputs.changed == 'true'
+        if: steps.git-check.outputs.license_changed == 'true'
         shell: pwsh
         run: |
           $stats = Get-Content ".github/stats.json" -Raw | ConvertFrom-Json
-          $date = $stats.updated_at
+          $date = Get-Date -Format "MMM dd, yyyy"
           $qty_raw = [int]$stats.quantity
           $qty = $stats.label
 
           $cfw_dir = "PS3CFW-LICENSES0_00-0000000000000000"
           $cfw_exdata = "$cfw_dir/dev_hdd0/exdata"
-
           if (Test-Path $cfw_dir) {
             Remove-Item -Recurse -Force $cfw_dir
           }
-
           New-Item -ItemType Directory -Force -Path $cfw_exdata
           Copy-Item "files/*" -Destination $cfw_exdata
           & .github\scripts\make_pkg.exe $cfw_dir
-
           if (Test-Path "$cfw_dir.pkg") {
             Rename-Item "$cfw_dir.pkg" "License_Pack.pkg" -Force
           }
 
           $hfw_dir = "PS3HFW-LICENSES0_00-0000000000000000"
           $hfw_exdata = "$hfw_dir/dev_hdd0/exdata"
-
           if (Test-Path $hfw_dir) {
             Remove-Item -Recurse -Force $hfw_dir
           }
-
           New-Item -ItemType Directory -Force -Path $hfw_exdata
           Copy-Item "rap.bin" -Destination $hfw_exdata
           & .github\scripts\make_pkg.exe $hfw_dir
-
           if (Test-Path "$hfw_dir.pkg") {
             Rename-Item "$hfw_dir.pkg" "License_Pack_Bin.pkg" -Force
           }
@@ -100,7 +113,23 @@ jobs:
           gh release edit Licenses --notes "$notes"
           gh release upload Licenses License_Pack.pkg License_Pack_Bin.pkg --clobber
 
+      - name: Commit and Push Changes
+        if: steps.git-check.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $stats = Get-Content ".github/stats.json" -Raw | ConvertFrom-Json
+          $date = Get-Date -Format "MMM dd, yyyy"
+          $qty = $stats.label
+
           git config --global user.name "PS3-Pro Bot"
           git config --global user.email "bot@ps3pro.com"
+          git add files/ rap.bin .github/stats.json .github/license_catalog.json
+
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            echo "No staged changes to commit."
+            exit 0
+          }
+
           git commit -m "Auto-update: $date ($qty files synced)"
           git push
