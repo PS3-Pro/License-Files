@@ -4,7 +4,7 @@ import json
 import binascii
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-from io import StringIO
+from io import BytesIO, StringIO
 
 import pandas as pd
 import requests
@@ -13,7 +13,6 @@ FILES_DIR = "files"
 RAP_BIN_EXE = "rap.bin"
 STATS_JSON = ".github/stats.json"
 CATALOG_JSON = ".github/catalog.json"
-
 # Keep this list aligned with every source used by the License Pack.
 TSV_SOURCES = [
     {"url": "https://nopaystation.com/tsv/PS3_GAMES.tsv", "type": "game", "label": "Games", "platform": "PS3"},
@@ -30,7 +29,6 @@ TSV_SOURCES = [
     {"url": "https://nopaystation.com/tsv/pending/PS3_DEMOS.tsv", "type": "demo", "label": "Demos", "platform": "PS3"},
 ]
 
-
 def clean_value(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
@@ -46,14 +44,12 @@ def repair_mojibake(value):
     text = clean_value(value)
     if not text:
         return ""
-
     # Legacy strings from older NPS exports / decode paths.
     text = (text
             .replace("Γäó", "™")
             .replace("ΓÇô", "–")
             .replace("ΓÇö", "—")
             .replace("ΓÇÖ", "’"))
-
     # Repair UTF-8 bytes that were previously decoded as Windows-1252.
     # Run twice so double-mojibake such as "Ã¢â€žÂ¢" also collapses to "™".
     for _ in range(2):
@@ -66,7 +62,6 @@ def repair_mojibake(value):
         if repaired == text:
             break
         text = repaired
-
     # Final targeted fallbacks for malformed legacy strings that cannot be
     # round-tripped as a whole through cp1252.
     return (text
@@ -84,7 +79,6 @@ def process_tsv(source):
     """Downloads one NPS TSV, refreshes RAP files, and returns catalog rows."""
     url = source["url"]
     catalog_rows = []
-
     try:
         response = requests.get(url, timeout=30, headers={"User-Agent": "PS3-Pro-License-Sync/2.0"})
         response.raise_for_status()
@@ -96,17 +90,14 @@ def process_tsv(source):
             # catalog update and leaving an old catalog online.
             tsv_text = response.content.decode("cp1252")
         frame = pd.read_csv(StringIO(tsv_text), sep="\t", dtype=str, keep_default_na=False)
-
         for row in frame.to_dict("records"):
             content_id = clean_value(row.get("Content ID"))
             rap_value = clean_value(row.get("RAP"))
-
             # Keep the existing License Pack behavior: valid 16-byte RAP values become files.
             if len(content_id) == 36 and is_valid_rap(rap_value):
                 file_path = os.path.join(FILES_DIR, f"{content_id}.rap")
                 with open(file_path, "wb") as handle:
                     handle.write(binascii.unhexlify(rap_value[:32]))
-
             name = clean_catalog_name(row.get("Name"))
             title_id = clean_value(row.get("Title ID")).upper()
             region = clean_value(row.get("Region")).upper()
@@ -114,7 +105,6 @@ def process_tsv(source):
             # A few rows may not expose Title ID, but Content ID still makes them searchable/listable.
             if not name and not title_id and not content_id:
                 continue
-
             not_required = bool(re.search(r"NOT\s+REQUIRED", rap_value, re.IGNORECASE))
             catalog_rows.append({
                 "n": name,
@@ -126,7 +116,6 @@ def process_tsv(source):
                 "p": source["platform"],
                 "nr": 1 if not_required else 0,
             })
-
     except Exception as exc:
         print(f"Error processing {url}: {exc}")
         return {"ok": False, "rows": [], "url": url}
@@ -139,22 +128,42 @@ def get_license_files():
 
 
 def create_rap_bin():
-    """Generates the consolidated rap.bin container."""
+    """Generates the consolidated rap.bin only when the license data changes."""
     magic = b"\xFA\xF0\xFA\xF0" + b"\x00" * 12
     pad = b"\x00" * 12
+    output = BytesIO()
+    for filename in get_license_files():
+        content_id = filename[:-4]
+        file_path = os.path.join(FILES_DIR, filename)
+        with open(file_path, "rb") as handle:
+            content = handle.read(16)
+        if len(content) == 16 and len(content_id) == 36:
+            output.write(magic + content_id.encode() + pad + content)
+    packed = output.getvalue()
+    if os.path.isfile(RAP_BIN_EXE):
+        with open(RAP_BIN_EXE, "rb") as handle:
+            if handle.read() == packed:
+                print("rap.bin unchanged")
+                return False
+    with open(RAP_BIN_EXE, "wb") as handle:
+        handle.write(packed)
+    print("rap.bin updated")
+    return True
 
-    with open(RAP_BIN_EXE, "wb") as output:
-        for filename in get_license_files():
-            content_id = filename[:-4]
-            file_path = os.path.join(FILES_DIR, filename)
-            with open(file_path, "rb") as handle:
-                content = handle.read(16)
-            if len(content) == 16 and len(content_id) == 36:
-                output.write(magic + content_id.encode() + pad + content)
 
-
-def write_stats(quantity, now):
+def write_stats(quantity, now, licenses_changed):
     label = f"{quantity:,}".replace(",", ".")
+    try:
+        with open(STATS_JSON, "r", encoding="utf-8") as handle:
+            previous = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        previous = None
+    if (not licenses_changed and isinstance(previous, dict)
+            and previous.get("quantity") == quantity
+            and previous.get("label") == label
+            and previous.get("date") and previous.get("updated_at")):
+        print("Stats unchanged")
+        return False
     stats = {
         "quantity": quantity,
         "label": label,
@@ -165,7 +174,8 @@ def write_stats(quantity, now):
     with open(STATS_JSON, "w", encoding="utf-8") as handle:
         json.dump(stats, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
-
+    print("Stats updated")
+    return True
 
 def catalog_key(item):
     # Content ID is the strongest identity. Keep region/type/title in the fallback for rows without one.
@@ -181,7 +191,6 @@ def catalog_key(item):
         item.get("n", "").casefold(),
     )
 
-
 def write_catalog(all_rows, now):
     # Keep the exact filename so the website can download an individual license without guessing.
     license_file_by_id = {os.path.splitext(name)[0].lower(): name for name in get_license_files()}
@@ -191,13 +200,11 @@ def write_catalog(all_rows, now):
     unique = {}
     for item in all_rows:
         unique.setdefault(catalog_key(item), item)
-
     content = []
     type_counts = {}
     license_count = 0
     missing_count = 0
     not_required_count = 0
-
     for item in unique.values():
         content_id = item.get("cid", "").strip().lower()
         license_file = license_file_by_id.get(content_id, "") if content_id else ""
@@ -210,7 +217,6 @@ def write_catalog(all_rows, now):
         else:
             status = "missing"
             missing_count += 1
-
         item = dict(item)
         item.pop("nr", None)
         item["s"] = status
@@ -224,7 +230,6 @@ def write_catalog(all_rows, now):
         clean_value(item.get("id")),
         clean_value(item.get("cid")),
     ))
-
     payload = {
         "updated_at": now.isoformat(),
         "count": len(content),
@@ -234,7 +239,16 @@ def write_catalog(all_rows, now):
         "types": type_counts,
         "content": content,
     }
-
+    try:
+        with open(CATALOG_JSON, "r", encoding="utf-8") as handle:
+            previous = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        previous = None
+    if (isinstance(previous, dict) and previous.get("updated_at")
+            and {key: value for key, value in previous.items() if key != "updated_at"}
+            == {key: value for key, value in payload.items() if key != "updated_at"}):
+        print("Catalog unchanged")
+        return False
     catalog_dir = os.path.dirname(CATALOG_JSON)
     if catalog_dir:
         os.makedirs(catalog_dir, exist_ok=True)
@@ -246,7 +260,7 @@ def write_catalog(all_rows, now):
         f"Catalog generated: {len(content)} entries | "
         f"{license_count} with license | {not_required_count} not required | {missing_count} missing"
     )
-
+    return True
 
 def main():
     os.makedirs(FILES_DIR, exist_ok=True)
@@ -255,14 +269,12 @@ def main():
     # executor.map preserves TSV_SOURCES order, so official rows retain priority over pending duplicates.
     with ThreadPoolExecutor(max_workers=5) as executor:
         source_results = list(executor.map(process_tsv, TSV_SOURCES))
-
     all_catalog_rows = [row for result in source_results for row in result["rows"]]
     failed_sources = [result["url"] for result in source_results if not result["ok"]]
-    create_rap_bin()
-
+    licenses_changed = create_rap_bin()
     now = datetime.now(timezone.utc)
     quantity = len(get_license_files())
-    write_stats(quantity, now)
+    write_stats(quantity, now, licenses_changed)
     if failed_sources:
         print("Catalog not replaced because one or more TSV sources failed:")
         for url in failed_sources:
